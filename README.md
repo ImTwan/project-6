@@ -1,5 +1,6 @@
 # Project 06: Data Pipeline & Storage
 ## 1. Project Structure
+<pre>
 project-6/
 ├── logs/
 ├── src/
@@ -13,7 +14,7 @@ project-6/
 ├── README.md
 ├── pyproject.toml
 └── uv.lock
-
+</pre>
 ## 2. Installation & Environment Setup
 * Install uv:
 ```text
@@ -38,3 +39,4 @@ From project root:
 ```text
  uv run src/project6/trigger_bigquery_test_on_local.py
 ```
+
