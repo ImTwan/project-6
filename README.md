@@ -10,7 +10,7 @@ project-6/
 │       ├── trigger_bigquery_test_on_GCP.py
 │       └── trigger_bigquery_test_on_local.py
 ├── .gitignore
-├── .python*version
+├── .python-version
 ├── README.md
 ├── pyproject.toml
 └── uv.lock
@@ -39,4 +39,5 @@ From project root:
 ```text
  uv run src/project6/trigger_bigquery_test_on_local.py
 ```
+
 
