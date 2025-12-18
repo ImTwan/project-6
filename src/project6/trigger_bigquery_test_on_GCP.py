@@ -1,17 +1,11 @@
-import os
 import logging
-from flask import Flask, request
+import os
+from flask import Request, jsonify
 from google.cloud import bigquery
 
-# --------------------------------
-# App setup (REQUIRED for Cloud Run)
-# --------------------------------
-app = Flask(__name__)
-logging.basicConfig(level=logging.INFO)
-
-# --------------------------------
-# Config
-# --------------------------------
+# -------------------------------------------------
+# CONFIG
+# -------------------------------------------------
 PROJECT_ID = "fresh-ocean-475916-m2"
 DATASET_ID = "glamira_dataset"
 
@@ -22,65 +16,82 @@ TABLE_MAP = {
     "summary": "glamira_raw"
 }
 
-# --------------------------------
-# HTTP endpoint
-# --------------------------------
-@app.route("/", methods=["POST"])
-def trigger_bigquery_load():
+logging.basicConfig(level=logging.INFO)
+
+# -------------------------------------------------
+# CLOUD RUN ENTRYPOINT (HTTP)
+# -------------------------------------------------
+def trigger_bigquery_load(request: Request):
+    """
+    HTTP Cloud Run service.
+    Triggered by GCS finalized event or manual test.
+    """
+
     try:
-        data = request.get_json(silent=True)
-        if not data:
-            return ("Bad Request: No JSON body", 400)
+        event = request.get_json(silent=True)
+        if not event:
+            return ("No JSON body received", 400)
 
-        file_name = data.get("name")
-        bucket_name = data.get("bucket")
+        file_name = event.get("name")
+        bucket = event.get("bucket")
 
-        if not file_name or not bucket_name:
-            return ("Bad Request: Missing file or bucket", 400)
+        if not file_name or not bucket:
+            return ("Missing name or bucket", 400)
 
-        logging.info(f"Triggered by file: {file_name}")
+        logging.info(f"Received file: {file_name}")
+        logging.info(f"Bucket: {bucket}")
 
-        filename_only = os.path.basename(file_name)
-        prefix = filename_only.split(".")[0]
+        # -----------------------------
+        # Detect table from filename
+        # -----------------------------
+        base = os.path.basename(file_name).lower()
 
-        # Handle summary files: summary_00001.jsonl
-        if prefix.startswith("summary_"):
-            table_name = "glamira_raw"
-        else:
-            table_name = TABLE_MAP.get(prefix)
+        table_name = None
+        for prefix, table in TABLE_MAP.items():
+            if base.startswith(prefix):
+                table_name = table
+                break
 
         if not table_name:
-            logging.info("File not mapped to BigQuery table. Skipping.")
+            logging.info("File not mapped to any table. Skipping.")
             return ("Ignored", 200)
 
-        uri = f"gs://{bucket_name}/{file_name}"
+        # -----------------------------
+        # BigQuery setup
+        # -----------------------------
         client = bigquery.Client(project=PROJECT_ID)
+
+        table_id = f"{PROJECT_ID}.{DATASET_ID}.{table_name}"
+        uri = f"gs://{bucket}/{file_name}"
+
+        # 🔥 SINGLE SOURCE OF TRUTH: FETCH TABLE SCHEMA
+        table = client.get_table(table_id)
 
         job_config = bigquery.LoadJobConfig(
             source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
-            autodetect=True,
+            schema=table.schema,  # ✅ reuse existing schema
             write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
             ignore_unknown_values=True
         )
 
+        logging.info(f"Loading {uri} → {table_id}")
+
         load_job = client.load_table_from_uri(
             uri,
-            f"{PROJECT_ID}.{DATASET_ID}.{table_name}",
+            table_id,
             job_config=job_config
         )
 
         load_job.result()
 
-        logging.info(f"Loaded {uri} into {table_name}")
-        return ("OK", 200)
+        logging.info("Load completed successfully")
+
+        return jsonify({
+            "status": "success",
+            "table": table_name,
+            "rows_loaded": load_job.output_rows
+        })
 
     except Exception as e:
-        logging.exception("Failed")
+        logging.exception("BigQuery load failed")
         return (str(e), 500)
-
-
-# --------------------------------
-# REQUIRED for Cloud Run
-# --------------------------------
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080)
