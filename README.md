@@ -27,9 +27,13 @@ project-6/
 
 ## 3. Usage
 From project root:
-* Export MongoDB → GCS
+* Export summary collection from MongoDB to JSONL then upload to GCS bucket 
 ```
  uv run src/project6/export.py
+```
+* Export CSV files to JSONL then upload to GCS bucket
+```
+ uv run src/project6/export_csv_files.py
 ```
 * Load GCS → BigQuery manually
 ```
@@ -82,4 +86,5 @@ curl -X POST "https://prj6-1013748103239.us-central1.run.app" \
 > -H "ce-time: 2020-08-08T00:11:44.895529672Z" \
 > -H "ce-source: //storage.googleapis.com/projects/_/buckets/twan_glamira" \
 > -d '{  "name": "THE FILES on GCS BUCKET YOU WANT TO TEST(For example: dataset_export/ip_location_results.jsonl)",  "bucket": "YOUR BUCKET'S NAME ON GCS BUCKET",  "contentType": "application/json",  "metageneration": "1",  "timeCreated": "2020-04-23T07:38:57.230Z",  "updated": "2020-04-23T07:38:57.230Z" }'
+
 ```
